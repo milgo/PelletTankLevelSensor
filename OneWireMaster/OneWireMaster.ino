@@ -1,8 +1,18 @@
+#include "Adafruit_VL53L0X.h"
+#define ENABLE_PIN  2
 #define ONE_WIRE_PIN 3
 
+Adafruit_VL53L0X lox = Adafruit_VL53L0X();
+
 void setup() {
-  pinMode(ONE_WIRE_PIN, INPUT); // Default state
+  pinMode(ONE_WIRE_PIN, OUTPUT); // Default state
+  pinMode(ENABLE_PIN, INPUT); // Default state
   Serial.begin(9600);
+
+  if (!lox.begin()) {
+    Serial.println(F("Failed to boot VL53L0X"));
+    while(1);
+  }
 }
 
 // Function to send a bit
@@ -20,34 +30,29 @@ void sendBit(bool bit) {
 }
 
 // Function to reset bus
-bool resetBus() {
-  pinMode(ONE_WIRE_PIN, OUTPUT);
-  digitalWrite(ONE_WIRE_PIN, LOW);
-  delayMicroseconds(480);
-  pinMode(ONE_WIRE_PIN, INPUT);
-  delayMicroseconds(70);
-  long start = micros();
-  long duration = 0;
-  while (digitalRead(ONE_WIRE_PIN) == LOW){
-    duration = micros() - start;
-    if (duration > 1000) return false;
-  }
+bool waitForEnable() {
+  while (digitalRead(ENABLE_PIN) == LOW){}
   return true;
 }
 
 void loop() {
-  if (resetBus()) {
+
+    VL53L0X_RangingMeasurementData_t measure;
+    lox.rangingTest(&measure, false);
+    if (measure.RangeStatus != 4) {  // phase failures have incorrect data
+      //Serial.print("Distance (mm): "); Serial.println(measure.RangeMilliMeter);
+    } else {
+      //Serial.println(" out of range ");
+    }
+
+  if (waitForEnable()) {
     Serial.println("Slave Present");
-    //delayMicroseconds(60);//wait for slave to listen
-    pinMode(ONE_WIRE_PIN, OUTPUT);
+    delayMicroseconds(60);//wait for slave to listen
     digitalWrite(ONE_WIRE_PIN, HIGH); //set bus high
     Serial.print("bus high...");
-    //delayMicroseconds(100);
-    // Send 1 byte of data (e.g., 0x55)
-    for (int i=0; i<8; i++) sendBit(bitRead(0xca, i));
-    //while(1){}
+    for (int i=0; i<16; i++) sendBit(bitRead(measure.RangeMilliMeter, i));
   }else{
     Serial.println("Slave not Present");
   }
-  delay(1000);
+  delay(100);
 }
