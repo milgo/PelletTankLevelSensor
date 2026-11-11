@@ -37,20 +37,28 @@ bool waitForEnable() {
 
 void loop() {
 
-    VL53L0X_RangingMeasurementData_t measure;
-    lox.rangingTest(&measure, false);
-    if (measure.RangeStatus != 4) {  // phase failures have incorrect data
-      //Serial.print("Distance (mm): "); Serial.println(measure.RangeMilliMeter);
+    VL53L0X_RangingMeasurementData_t level;
+    lox.rangingTest(&level, false);
+    /*if (measure.RangeStatus != 4) {  // phase failures have incorrect data
+      Serial.print("Distance (mm): "); Serial.println(measure.RangeMilliMeter);
     } else {
-      //Serial.println(" out of range ");
-    }
+      Serial.println(" out of range ");
+    }*/
+  
+  union {
+    long ival;
+    float fval;
+  } temp;
+    
+  temp.fval = 1.2345f;
 
   if (waitForEnable()) {
     Serial.println("Slave Present");
     delayMicroseconds(60);//wait for slave to listen
     digitalWrite(ONE_WIRE_PIN, HIGH); //set bus high
     Serial.print("bus high...");
-    for (int i=0; i<16; i++) sendBit(bitRead(measure.RangeMilliMeter, i));
+    for (int i=0; i<16; i++) sendBit(bitRead(level.RangeMilliMeter, i));
+    for (int i=0; i<32; i++) sendBit(bitRead(temp.ival, i));
   }else{
     Serial.println("Slave not Present");
   }
