@@ -1,11 +1,24 @@
-#include "Adafruit_VL53L0X.h"
+#include <OneWire.h>
+#include <Adafruit_VL53L0X.h>
+#include <DallasTemperature.h>
+
 #define ENABLE_PIN  2
-#define ONE_WIRE_PIN 3
+#define DATALOG_ONE_WIRE_BUS 3
+#define TEMP_ONE_WIRE_BUS 9
 
 Adafruit_VL53L0X lox = Adafruit_VL53L0X();
+OneWire oneWire(TEMP_ONE_WIRE_BUS);
+DallasTemperature tempSensor(&oneWire);
+
+union {
+  long ival;
+  float fval;
+} temp;
+
+uint16_t level = 0;
 
 void setup() {
-  pinMode(ONE_WIRE_PIN, OUTPUT); // Default state
+  pinMode(DATALOG_ONE_WIRE_BUS, OUTPUT); // Default state
   pinMode(ENABLE_PIN, INPUT); // Default state
   Serial.begin(9600);
 
@@ -13,54 +26,38 @@ void setup() {
     Serial.println(F("Failed to boot VL53L0X"));
     while(1);
   }
+
+  lox.startRangeContinuous();
+  tempSensor.begin();
+  tempSensor.setResolution(12);
 }
 
 // Function to send a bit
 void sendBit(bool bit) {
-  digitalWrite(ONE_WIRE_PIN, LOW);
+  digitalWrite(DATALOG_ONE_WIRE_BUS, LOW);
   if (bit == 1) {
     delayMicroseconds(10); // Short low for 1
-    digitalWrite(ONE_WIRE_PIN, HIGH);
+    digitalWrite(DATALOG_ONE_WIRE_BUS, HIGH);
     delayMicroseconds(50);
   } else {
     delayMicroseconds(50); // Long low for 0
-    digitalWrite(ONE_WIRE_PIN, HIGH);
+    digitalWrite(DATALOG_ONE_WIRE_BUS, HIGH);
     delayMicroseconds(10);
   }
 }
 
-// Function to reset bus
-bool waitForEnable() {
-  while (digitalRead(ENABLE_PIN) == LOW){}
-  return true;
-}
-
 void loop() {
 
-    VL53L0X_RangingMeasurementData_t level;
-    lox.rangingTest(&level, false);
-    /*if (measure.RangeStatus != 4) {  // phase failures have incorrect data
-      Serial.print("Distance (mm): "); Serial.println(measure.RangeMilliMeter);
-    } else {
-      Serial.println(" out of range ");
-    }*/
-  
-  union {
-    long ival;
-    float fval;
-  } temp;
-    
-  temp.fval = 1.2345f;
+  if (lox.isRangeComplete()) {
+    level = lox.readRange();
+  }  
 
-  if (waitForEnable()) {
-    Serial.println("Slave Present");
+  if (digitalRead(ENABLE_PIN) != LOW) {
+    temp.fval = 1.234f;
     delayMicroseconds(60);//wait for slave to listen
-    digitalWrite(ONE_WIRE_PIN, HIGH); //set bus high
-    Serial.print("bus high...");
-    for (int i=0; i<16; i++) sendBit(bitRead(level.RangeMilliMeter, i));
+    digitalWrite(DATALOG_ONE_WIRE_BUS, HIGH); //set bus high
+    //Serial.print("bus high...");
+    for (int i=0; i<16; i++) sendBit(bitRead(level, i));
     for (int i=0; i<32; i++) sendBit(bitRead(temp.ival, i));
-  }else{
-    Serial.println("Slave not Present");
   }
-  delay(100);
 }
